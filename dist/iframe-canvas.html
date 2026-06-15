@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Iframe Canvas</title>
+  <style>
+    html, body { margin: 0; background: #0f1116; color: #e6e9ef;
+      font-family: system-ui, sans-serif; }
+    .wrap { padding: 16px; }
+    canvas { display: block; border: 1px solid #2c313c; border-radius: 10px; background: #000; cursor: pointer; }
+    .bar { display: flex; gap: 10px; align-items: center; margin-bottom: 12px; }
+    .badge { font-size: 12px; padding: 3px 8px; border-radius: 999px;
+      background: #20242d; border: 1px solid #2c313c; color: #9aa3b2; }
+    button { background: #5b8cff; color: #fff; border: 0; padding: 8px 14px;
+      border-radius: 8px; cursor: pointer; font-size: 14px; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="bar">
+      <span class="badge">inside &lt;iframe&gt;</span>
+      <span class="badge" id="frames">frames: 0</span>
+      <span class="badge" id="clicks">clicks: 0</span>
+      <button id="pauseBtn">Pause</button>
+    </div>
+    <canvas id="c" width="560" height="320" data-testid="iframe-inner-canvas"></canvas>
+  </div>
+  <script>
+    const canvas = document.getElementById('c');
+    const ctx = canvas.getContext('2d');
+    const framesEl = document.getElementById('frames');
+    const clicksEl = document.getElementById('clicks');
+    let frames = 0, clicks = 0, running = true, t = 0;
+
+    canvas.addEventListener('click', () => {
+      clicks++; clicksEl.textContent = 'clicks: ' + clicks;
+      // notify the parent app a click happened inside the iframe
+      try { parent.postMessage({ type: 'iframe-canvas-click', clicks }, '*'); } catch (e) {}
+    });
+    document.getElementById('pauseBtn').addEventListener('click', (e) => {
+      running = !running; e.target.textContent = running ? 'Pause' : 'Resume';
+    });
+
+    function draw() {
+      if (running) {
+        t += 0.03;
+        ctx.fillStyle = '#11141b';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        const cx = canvas.width / 2, cy = canvas.height / 2;
+        for (let i = 0; i < 8; i++) {
+          const a = t + i * (Math.PI / 4);
+          const r = 90 + 30 * Math.sin(t * 1.5 + i);
+          const x = cx + Math.cos(a) * r, y = cy + Math.sin(a) * r;
+          ctx.beginPath();
+          ctx.arc(x, y, 16 + 6 * Math.sin(t + i), 0, Math.PI * 2);
+          ctx.fillStyle = `hsl(${(i * 45 + t * 40) % 360} 70% 60%)`;
+          ctx.fill();
+        }
+        ctx.fillStyle = '#9aa3b2';
+        ctx.font = '13px system-ui';
+        ctx.fillText('Animated canvas rendered inside a same-origin iframe', 16, 24);
+        frames++; framesEl.textContent = 'frames: ' + frames;
+      }
+      requestAnimationFrame(draw);
+    }
+    draw();
+  </script>
+</body>
+</html>
