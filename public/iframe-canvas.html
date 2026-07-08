@@ -3,6 +3,10 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <!-- Content-Security-Policy for the framed page. Inline <script>/<style>
+       are used here, so 'unsafe-inline' is required; frame-ancestors 'self'
+       restricts who may embed this page to the same origin (the parent app). -->
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; base-uri 'self'; form-action 'self'; frame-ancestors 'self'" />
   <title>Iframe Canvas</title>
   <style>
     html, body { margin: 0; background: #0f1116; color: #e6e9ef;
@@ -22,26 +26,79 @@
       <span class="badge">inside &lt;iframe&gt;</span>
       <span class="badge" id="frames">frames: 0</span>
       <span class="badge" id="clicks">clicks: 0</span>
+      <span class="badge" id="dbls">dbl: 0</span>
+      <span class="badge" id="longs">long: 0</span>
+      <span class="badge" id="gesture">gesture: none</span>
       <button id="pauseBtn">Pause</button>
     </div>
     <canvas id="c" width="560" height="320" data-testid="iframe-inner-canvas"></canvas>
+    <p style="margin:12px 0 0;font-size:12px;color:#9aa3b2">
+      Click = shift colors · double-click = pause/resume · long-press (~0.5s) = reset frames.
+    </p>
   </div>
   <script>
     const canvas = document.getElementById('c');
     const ctx = canvas.getContext('2d');
     const framesEl = document.getElementById('frames');
     const clicksEl = document.getElementById('clicks');
+    const dblsEl = document.getElementById('dbls');
+    const longsEl = document.getElementById('longs');
+    const gestureEl = document.getElementById('gesture');
+    const pauseBtn = document.getElementById('pauseBtn');
     const scene = new URLSearchParams(location.search).get('scene') || 'orbit';
-    let frames = 0, clicks = 0, running = true, t = 0;
+    let frames = 0, clicks = 0, dbls = 0, longs = 0, running = true, t = 0, hueShift = 0;
 
-    canvas.addEventListener('click', () => {
+    const LONG_MS = 500, DBL_MS = 300;
+    let longTimer = null, clickTimer = null, longFired = false;
+
+    function setPause(next) {
+      running = next;
+      pauseBtn.textContent = running ? 'Pause' : 'Resume';
+    }
+    function report(gesture) {
+      gestureEl.textContent = 'gesture: ' + gesture;
+      canvas.dataset.lastGesture = gesture;
+      // notify the parent app which gesture happened inside the iframe
+      try {
+        parent.postMessage(
+          { type: 'iframe-canvas-gesture', gesture, clicks, dbls, longs },
+          '*'
+        );
+      } catch (e) {}
+    }
+
+    function onSingleClick() {
       clicks++; clicksEl.textContent = 'clicks: ' + clicks;
-      // notify the parent app a click happened inside the iframe
-      try { parent.postMessage({ type: 'iframe-canvas-click', clicks }, '*'); } catch (e) {}
+      hueShift = (hueShift + 60) % 360; // shift the color palette
+      report('click');
+    }
+    function onDoubleClick() {
+      dbls++; dblsEl.textContent = 'dbl: ' + dbls;
+      setPause(!running);
+      report('dblclick');
+    }
+    function onLongPress() {
+      longs++; longsEl.textContent = 'long: ' + longs;
+      frames = 0; framesEl.textContent = 'frames: 0';
+      report('longpress');
+    }
+
+    canvas.addEventListener('pointerdown', () => {
+      longFired = false;
+      longTimer = setTimeout(() => { longFired = true; onLongPress(); }, LONG_MS);
     });
-    document.getElementById('pauseBtn').addEventListener('click', (e) => {
-      running = !running; e.target.textContent = running ? 'Pause' : 'Resume';
+    canvas.addEventListener('pointerup', () => clearTimeout(longTimer));
+    canvas.addEventListener('pointerleave', () => clearTimeout(longTimer));
+    canvas.addEventListener('click', () => {
+      if (longFired) { longFired = false; return; }   // consumed by long press
+      if (clickTimer) return;                           // second tap → dblclick handles it
+      clickTimer = setTimeout(() => { clickTimer = null; onSingleClick(); }, DBL_MS);
     });
+    canvas.addEventListener('dblclick', () => {
+      clearTimeout(clickTimer); clickTimer = null;
+      onDoubleClick();
+    });
+    pauseBtn.addEventListener('click', () => setPause(!running));
 
     function draw() {
       if (running) {
@@ -53,7 +110,7 @@
           const n = 9, bw = canvas.width / (n + 2);
           for (let i = 0; i < n; i++) {
             const h = (0.5 + 0.5 * Math.sin(t + i * 0.6)) * (canvas.height - 80);
-            ctx.fillStyle = `hsl(${(i * 30 + t * 30) % 360} 70% 60%)`;
+            ctx.fillStyle = `hsl(${(i * 30 + t * 30 + hueShift) % 360} 70% 60%)`;
             ctx.fillRect((i + 1) * bw, canvas.height - 30 - h, bw * 0.7, h);
           }
         } else if (scene === 'spiral') {
@@ -63,7 +120,7 @@
             const x = cx + Math.cos(a) * r, y = cy + Math.sin(a) * r;
             ctx.beginPath();
             ctx.arc(x, y, 3, 0, Math.PI * 2);
-            ctx.fillStyle = `hsl(${(i * 3 + t * 40) % 360} 70% 60%)`;
+            ctx.fillStyle = `hsl(${(i * 3 + t * 40 + hueShift) % 360} 70% 60%)`;
             ctx.fill();
           }
         } else {
@@ -73,7 +130,7 @@
             const x = cx + Math.cos(a) * r, y = cy + Math.sin(a) * r;
             ctx.beginPath();
             ctx.arc(x, y, 16 + 6 * Math.sin(t + i), 0, Math.PI * 2);
-            ctx.fillStyle = `hsl(${(i * 45 + t * 40) % 360} 70% 60%)`;
+            ctx.fillStyle = `hsl(${(i * 45 + t * 40 + hueShift) % 360} 70% 60%)`;
             ctx.fill();
           }
         }

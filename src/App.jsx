@@ -7,6 +7,7 @@ import WebGLPreserve from './sections/WebGLPreserve.jsx'
 import WebGL2Section from './sections/WebGL2Section.jsx'
 import CanvasIframe from './sections/CanvasIframe.jsx'
 import CanvasLoading from './sections/CanvasLoading.jsx'
+import CanvasDragDrop from './sections/CanvasDragDrop.jsx'
 
 const NAV = [
   { to: '/header', label: '1 · Header', el: <Header /> },
@@ -17,6 +18,7 @@ const NAV = [
   { to: '/webgl2', label: '6 · WebGL2', el: <WebGL2Section /> },
   { to: '/canvas-iframe', label: '7 · Canvas in iframe', el: <CanvasIframe /> },
   { to: '/canvas-loading', label: '8 · Canvas loading', el: <CanvasLoading /> },
+  { to: '/canvas-dnd', label: '9 · Canvas drag & drop', el: <CanvasDragDrop /> },
 ]
 
 export default function App() {

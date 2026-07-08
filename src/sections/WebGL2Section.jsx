@@ -39,12 +39,65 @@ void main() {
 }
 `
 
+const LONG_MS = 500
+const DBL_MS = 300
+
 export default function WebGL2Section() {
   const canvasRef = useRef(null)
   const [status, setStatus] = useState('init')
   const [mode, setMode] = useState(0)
+  const [paused, setPaused] = useState(false)
+  const [lastGesture, setLastGesture] = useState('none')
   const modeRef = useRef(0)
   modeRef.current = mode
+  const pausedRef = useRef(false)
+  pausedRef.current = paused
+
+  // gesture bookkeeping
+  const longTimer = useRef(null)
+  const clickTimer = useRef(null)
+  const longFired = useRef(false)
+
+  const setGesture = (g) => {
+    setLastGesture(g)
+    const el = canvasRef.current
+    if (el) el.dataset.lastGesture = g
+  }
+
+  const handleSingleClick = () => {
+    setGesture('click')
+    setMode((m) => (m + 1) % 3)
+  }
+  const handleDoubleClick = () => {
+    setGesture('dblclick')
+    setMode((m) => (m + 2) % 3) // step backwards through 3 modes
+  }
+  const handleLongPress = () => {
+    setGesture('longpress')
+    setPaused((p) => !p)
+  }
+
+  const onPointerDown = () => {
+    longFired.current = false
+    longTimer.current = setTimeout(() => {
+      longFired.current = true
+      handleLongPress()
+    }, LONG_MS)
+  }
+  const onPointerUp = () => clearTimeout(longTimer.current)
+  const onClick = () => {
+    if (longFired.current) { longFired.current = false; return } // consumed by long press
+    if (clickTimer.current) return // second tap — handled by onDoubleClick
+    clickTimer.current = setTimeout(() => {
+      clickTimer.current = null
+      handleSingleClick()
+    }, DBL_MS)
+  }
+  const onDoubleClick = () => {
+    clearTimeout(clickTimer.current)
+    clickTimer.current = null
+    handleDoubleClick()
+  }
 
   useEffect(() => {
     const canvas = canvasRef.current
@@ -88,9 +141,13 @@ export default function WebGL2Section() {
       const version = gl.getParameter(gl.VERSION)
       setStatus('ready · ' + version)
 
-      const start = performance.now()
+      let last = performance.now()
+      let elapsed = 0
       const loop = () => {
-        gl.uniform1f(uTime, (performance.now() - start) / 1000)
+        const now = performance.now()
+        if (!pausedRef.current) elapsed += now - last
+        last = now
+        gl.uniform1f(uTime, elapsed / 1000)
         gl.uniform1i(uMode, modeRef.current)
         gl.drawArrays(gl.TRIANGLES, 0, 6)
         raf = requestAnimationFrame(loop)
@@ -106,15 +163,22 @@ export default function WebGL2Section() {
     <div>
       <h2 className="section-title">6 · WebGL2</h2>
       <p className="section-sub">
-        A real WebGL2 context with GLSL ES 3.00 shaders and a VAO, animating every frame. Click to switch the shader mode.
+        A real WebGL2 context with GLSL ES 3.00 shaders and a VAO, animating every frame.
+        <strong> Click</strong> for the next shader mode, <strong>double-click</strong> to step back,
+        and <strong>long-press</strong> (hold ~0.5s) to pause / resume the animation.
       </p>
       <ScreenNav screens={SCREENS} active={mode} onChange={setMode} idBase="webgl2" />
 
       <div className="row" style={{ marginBottom: 12 }}>
         <span className="badge" data-testid="webgl2-status">{status}</span>
         <span className="badge" data-testid="webgl2-mode">mode: {mode}</span>
+        <span className="badge" data-testid="webgl2-paused">{paused ? 'paused' : 'running'}</span>
+        <span className="badge" data-testid="webgl2-last-gesture">gesture: {lastGesture}</span>
         <button className="secondary" data-testid="webgl2-mode-btn" onClick={() => setMode((m) => (m + 1) % 3)}>
           Next mode
+        </button>
+        <button className="secondary" data-testid="webgl2-pause-btn" onClick={() => setPaused((p) => !p)}>
+          {paused ? 'Resume' : 'Pause'}
         </button>
       </div>
       <canvas
@@ -122,8 +186,15 @@ export default function WebGL2Section() {
         width={640}
         height={400}
         data-testid="webgl2-canvas"
-        onClick={() => setMode((m) => (m + 1) % 3)}
-        style={{ cursor: 'pointer' }}
+        data-mode={mode}
+        data-paused={paused}
+        data-last-gesture={lastGesture}
+        onPointerDown={onPointerDown}
+        onPointerUp={onPointerUp}
+        onPointerLeave={onPointerUp}
+        onClick={onClick}
+        onDoubleClick={onDoubleClick}
+        style={{ cursor: 'pointer', touchAction: 'none' }}
       />
     </div>
   )
