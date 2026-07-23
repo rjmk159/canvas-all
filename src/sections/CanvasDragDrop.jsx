@@ -6,7 +6,7 @@ import { useEffect, useRef, useState } from 'react'
 // canvas element — nothing is a DOM node.
 
 const INITIAL = [
-  { id: 'a', label: 'Alpha', x: 60, y: 90, w: 150, h: 90, color: '#1b2540' },
+  { id: 'a', label: 'Alpha', x: 0, y: 330, w: 150, h: 90, color: '#1b2540' },
   { id: 'b', label: 'Beta', x: 280, y: 150, w: 150, h: 90, color: '#2a1840' },
   { id: 'c', label: 'Gamma', x: 500, y: 230, w: 150, h: 90, color: '#103326' },
 ]
